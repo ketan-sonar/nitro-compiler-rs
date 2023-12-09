@@ -1,6 +1,7 @@
-mod tokenizer;
-mod parser;
+mod arena;
 mod generator;
+mod parser;
+mod tokenizer;
 
 use std::{env::args, process::exit, fs::File, io::{Read, Write}};
 
@@ -32,15 +33,15 @@ fn main() {
 
     let mut tokenizer = Tokenizer::new(src.into_bytes());
     let tokens = tokenizer.tokenize();
-    dbg!(&tokens);
+    // dbg!(&tokens);
 
     let mut parser = Parser::new(tokens);
     let ast = parser.parse();
-    dbg!(&ast);
+    // dbg!(&ast);
 
     let mut generator = Generator::new(ast);
     let asm_string = generator.generate();
-    dbg!(&asm_string);
+    // dbg!(&asm_string);
 
     let output_filename = &args[2];
     let mut output_file = File::create(output_filename)

@@ -15,4 +15,4 @@ build:
 	cargo r -- test.nt output.s
 
 clean:
-	rm output.*
+	rm output*

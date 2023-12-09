@@ -1,28 +1,47 @@
 use std::process::exit;
 
-use crate::tokenizer::{Token, TokenType};
+use crate::{tokenizer::{Token, TokenType}, arena::ArenaAllocator};
 
 #[derive(Debug, Clone)]
 pub enum NodeExpr {
     IntLiteral(Token),
     Ident(Token),
+    BinExpr(Box<NodeBinExpr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeBinExprAdd {
+    lhs: Box<NodeExpr>,
+    rhs: Box<NodeExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeBinExprMul {
+    lhs: Box<NodeExpr>,
+    rhs: Box<NodeExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeBinExpr {
+    Add(Box<NodeBinExprAdd>),
+    Mul(Box<NodeBinExprMul>),
 }
 
 #[derive(Debug, Clone)]
 pub struct NodeStmtExit {
-    pub expr: NodeExpr,
+    pub expr: Box<NodeExpr>,
 }
 
 #[derive(Debug, Clone)]
 pub struct NodeStmtLet {
     pub ident: Token,
-    pub expr: NodeExpr,
+    pub expr: Box<NodeExpr>,
 }
 
 #[derive(Debug, Clone)]
 pub enum NodeStmt {
-    Exit(NodeStmtExit),
-    Let(NodeStmtLet),
+    Exit(Box<NodeStmtExit>),
+    Let(Box<NodeStmtLet>),
 }
 
 #[derive(Debug)]
@@ -33,11 +52,18 @@ pub struct NodeProg {
 pub struct Parser {
     tokens: Vec<Token>,
     index: usize,
+    allocator: ArenaAllocator,
 }
+
+const FOUR_MB: usize = 4 * 1024 * 1024;
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, index: 0 }
+        Self {
+            tokens,
+            index: 0,
+            allocator: ArenaAllocator::new(FOUR_MB)
+        }
     }
 
     pub fn parse_expr(&mut self) -> Option<NodeExpr> {
@@ -57,8 +83,7 @@ impl Parser {
             if self.peek().is_some() && self.peek().unwrap().type_ == TokenType::LParen {
                 self.consume();
             } else {
-                eprintln!("ERROR: `(` expected");
-                exit(1);
+                Self::error_token_expected("(");
             }
 
             let expr = self.parse_expr();
@@ -70,51 +95,52 @@ impl Parser {
             if self.peek().is_some() && self.peek().unwrap().type_ == TokenType::RParen {
                 self.consume();
             } else {
-                eprintln!("ERROR: `)` expected");
-                exit(1);
+                Self::error_token_expected(")");
             }
 
             if self.peek().is_some() && self.peek().unwrap().type_ == TokenType::SemiColon {
                 self.consume();
             } else {
-                eprintln!("ERROR: `;` expected");
-                exit(1);
+                Self::error_token_expected(";");
             }
 
-            return Some(NodeStmt::Exit(NodeStmtExit {
-                expr: expr.unwrap(),
-            }));
+            let exit_stmt = Box::new(NodeStmtExit {
+                expr: Box::new(expr.unwrap()),
+            });
+
+            return Some(NodeStmt::Exit(exit_stmt));
         } else if token_type == TokenType::Let {
             self.consume();
-            let ident: Token;
+            let mut ident: Token = Token { type_: TokenType::Ident, value: None };
             if self.peek().is_some() && self.peek().unwrap().type_ == TokenType::Ident {
-                ident = self.consume();
+                ident.value = self.consume().value;
             } else {
-                eprintln!("ERROR: `identifier` expected");
-                exit(1);
+                Self::error_token_expected("identifier");
             }
 
             if self.peek().is_some() && self.peek().unwrap().type_ == TokenType::Eq {
                 self.consume();
             } else {
-                eprintln!("ERROR: `=` expected");
-                exit(1);
+                Self::error_token_expected("=");
             }
 
             let expr = self.parse_expr();
             if expr.is_none() {
-                eprintln!("ERROR: `expression` expected");
-                exit(1);
+                Self::error_token_expected("expression");
             }
 
             if self.peek().is_some() && self.peek().unwrap().type_ == TokenType::SemiColon {
                 self.consume();
             } else {
-                eprintln!("ERROR: `;` expected");
-                exit(1);
+                Self::error_token_expected(";");
             }
 
-            return Some(NodeStmt::Let(NodeStmtLet { ident, expr: expr.unwrap() }));
+            let let_stmt = Box::new(NodeStmtLet {
+                ident,
+                expr: Box::new(expr.unwrap()),
+            });
+
+            return Some(NodeStmt::Let(let_stmt));
         }
 
         None
@@ -133,6 +159,11 @@ impl Parser {
         }
 
         node_prog
+    }
+
+    fn error_token_expected(token: &str) {
+        eprintln!("ERROR: `{}` expected", token);
+        exit(1);
     }
 
     fn consume(&mut self) -> Token {

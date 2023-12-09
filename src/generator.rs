@@ -18,11 +18,16 @@ pub struct Generator {
 
 impl Generator {
     pub fn new(prog: NodeProg) -> Self {
-        Self { prog, output: String::new(), vars: HashMap::new(), stack_size: 0 }
+        Self {
+            prog,
+            output: String::new(),
+            vars: HashMap::new(),
+            stack_size: 0
+        }
     }
 
-    pub fn generate_expr(&mut self, expr: NodeExpr) {
-        match expr {
+    pub fn generate_expr(&mut self, expr: Box<NodeExpr>) {
+        match *expr {
             NodeExpr::IntLiteral(int_literal) => {
                 let value = int_literal.value.unwrap();
                 let inst = format!("    mov X0, #{}\n", value);
@@ -42,13 +47,16 @@ impl Generator {
                 self.output.push_str(&inst);
                 self.push("X0");
             }
+            NodeExpr::BinExpr(_bin_expr) => {
+                unimplemented!();
+            }
         }
     }
 
     pub fn generate_stmt(&mut self, stmt: NodeStmt) {
         match stmt {
             NodeStmt::Exit(exit_stmt) => {
-                self.generate_expr(exit_stmt.expr.clone());
+                self.generate_expr(exit_stmt.expr);
                 self.pop("X0");
                 self.output.push_str("    mov X16, #1\n");
                 self.output.push_str("    svc #0x80\n");
